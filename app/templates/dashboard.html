@@ -46,6 +46,41 @@
         <p class="data-help-note">Hoje os focos do INPE são consumidos via CSV online com cache; ainda não há sincronização automática periódica para o banco local.</p>
       </div>
     </details>
+    <section class="manual-panel" aria-labelledby="manual-title">
+      <h2 id="manual-title">Coleta manual</h2>
+      <p>Capture a posição do smartphone e salve um novo foco na base PostgreSQL.</p>
+      <form id="manual-focus-form" class="manual-form">
+        <div class="manual-coordinates">
+          <label class="form-label">Latitude
+            <input class="form-control" type="number" step="0.000001" name="lat" required>
+          </label>
+          <label class="form-label">Longitude
+            <input class="form-control" type="number" step="0.000001" name="lon" required>
+          </label>
+        </div>
+        <button id="capture-location" class="btn btn-outline-success btn-sm" type="button">Usar minha localização</button>
+        <label class="form-label">Município
+          <input class="form-control" type="text" name="municipio" placeholder="ex.: Campinas">
+        </label>
+        <label class="form-label">Estado
+          <input class="form-control" type="text" name="estado" placeholder="ex.: São Paulo">
+        </label>
+        <label class="form-label">Bioma
+          <input class="form-control" type="text" name="bioma" placeholder="ex.: Mata Atlântica">
+        </label>
+        <div class="manual-coordinates">
+          <label class="form-label">Satélite/Fonte
+            <input class="form-control" type="text" name="satelite" value="COLETA MANUAL">
+          </label>
+          <label class="form-label">FRP
+            <input class="form-control" type="number" step="0.1" name="frp">
+          </label>
+        </div>
+        <button class="btn btn-success btn-sm" type="submit">Salvar foco manual</button>
+      </form>
+      <button id="clone-current-base" class="btn btn-outline-secondary btn-sm" type="button">Clonar base atual para PostgreSQL</button>
+      <div class="manual-status" id="manual-status" role="status"></div>
+    </section>
     <div class="source-status" id="source-status">Verificando fontes...</div>
   </aside>
   <section class="workspace">

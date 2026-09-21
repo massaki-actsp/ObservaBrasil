@@ -398,6 +398,46 @@ Invoke-RestMethod `
 
 Na interface, o painel mostra `Acesso: celular`, `Acesso: tablet` ou `Acesso: desktop` no menu lateral.
 
+## Coleta manual com geolocalização
+
+O painel possui a seção **Coleta manual** para registrar novos focos diretamente pelo navegador do smartphone. O botão `Usar minha localização` usa a API `navigator.geolocation` do navegador para preencher latitude e longitude em tempo real.
+
+Campos usados no registro manual:
+
+```text
+Latitude: preenchida pela geolocalização ou digitada manualmente
+Longitude: preenchida pela geolocalização ou digitada manualmente
+Município: texto informado pelo usuário
+Estado: texto informado pelo usuário
+Bioma: texto informado pelo usuário
+Satélite/Fonte: por padrão COLETA MANUAL
+FRP: valor opcional informado pelo usuário
+```
+
+Ao clicar em `Salvar foco manual`, a aplicação envia os dados para:
+
+```text
+POST /api/focos/manual
+```
+
+O registro é salvo na tabela `focos_calor` do banco configurado em `DATABASE_URL`. Em produção, esse banco pode ser o PostgreSQL/Supabase ou o PostgreSQL criado no Render.
+
+Para clonar a base atualmente usada no painel para o PostgreSQL, use o botão:
+
+```text
+Clonar base atual para PostgreSQL
+```
+
+Esse botão chama:
+
+```text
+POST /api/queimadas/clonar-base
+```
+
+A clonagem respeita os filtros atuais do painel, como `Data do CSV`, `Estado`, `Bioma`, `Satélite` e `FRP mínimo`. Depois de salvo, o painel mescla os dados online do INPE com os registros existentes no PostgreSQL, evitando duplicidade por `id`.
+
+Importante: por segurança dos navegadores, a geolocalização funciona em `https://` ou em `localhost`. No Render, a URL publicada já usa HTTPS. Em testes na rede local pelo IP do computador, alguns celulares podem bloquear a permissão de localização.
+
 ## PostgreSQL
 
 Em produção, configure `DATABASE_URL`, por exemplo:

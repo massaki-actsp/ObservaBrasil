@@ -1,3 +1,4 @@
+from app.models.foco import FocoCalor
 from app.services import bdqueimadas
 
 
@@ -67,6 +68,53 @@ def test_resumo_por_bioma(client, monkeypatch):
     assert response.status_code == 200
     assert response.json["dados"]["por_bioma"]["Amazônia"] == 1
     assert response.json["dados"]["por_bioma"]["Cerrado"] == 1
+
+
+def test_criar_foco_manual(client, app):
+    response = client.post(
+        "/api/focos/manual",
+        json={
+            "lat": -23.55052,
+            "lon": -46.633308,
+            "municipio": "São Paulo",
+            "estado": "São Paulo",
+            "bioma": "Mata Atlântica",
+            "frp": 12.5,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json["dados"]["foco"]["fonte"] == "Coleta manual por geolocalização"
+    with app.app_context():
+        assert FocoCalor.query.count() == 1
+
+
+def test_criar_foco_manual_exige_lat_lon(client):
+    response = client.post("/api/focos/manual", json={"estado": "São Paulo"})
+
+    assert response.status_code == 400
+    assert response.json["sucesso"] is False
+
+
+def test_clonar_base_queimadas(client, app, monkeypatch):
+    monkeypatch.setattr(
+        bdqueimadas,
+        "obter_focos",
+        lambda *args, **kwargs: {
+            "url": "x",
+            "origem": "rede",
+            "focos": bdqueimadas.ler_csv(CSV),
+            "atualizado_em": "2026-09-19T12:00:00+00:00",
+        },
+    )
+
+    response = client.post("/api/queimadas/clonar-base?estado=Mato%20Grosso")
+
+    assert response.status_code == 201
+    assert response.json["dados"]["criados"] == 1
+    with app.app_context():
+        assert FocoCalor.query.count() == 1
+        assert FocoCalor.query.first().municipio == "Sinop"
 
 
 def test_criar_area_geojson(client):

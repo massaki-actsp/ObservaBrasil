@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from flask import Blueprint, current_app, g, request, session
 
 from app.extensions import db
 from app.models.area import AreaInteresse
 from app.models.alerta import HistoricoNotificacao
+from app.models.foco import FocoCalor
 from app.services import bdqueimadas
 from app.services.brazil_data_cube import buscar_produtos, status_stac
 from app.services.geoprocessamento import GeoJSONInvalido, foco_dentro_geojson, normalizar_geojson
@@ -35,6 +37,101 @@ def _serializar_foco(foco):
     return foco
 
 
+def _float_payload(payload, campo):
+    valor = payload.get(campo)
+    if valor in (None, ""):
+        return None
+    return float(valor)
+
+
+def _int_payload(payload, campo):
+    valor = payload.get(campo)
+    if valor in (None, ""):
+        return None
+    return int(valor)
+
+
+def _datetime_payload(payload):
+    valor = payload.get("data_hora_gmt") or payload.get("data_hora") or payload.get("data")
+    if not valor:
+        return datetime.now(timezone.utc)
+    if isinstance(valor, datetime):
+        return valor
+    texto = str(valor).strip().replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(texto)
+    except ValueError:
+        return datetime.strptime(texto, "%Y-%m-%d %H:%M:%S")
+
+
+def _foco_model_from_dict(foco, fonte_default="INPE BDQueimadas"):
+    return FocoCalor(
+        id=str(foco.get("id") or f"manual-{uuid4()}"),
+        lat=float(foco["lat"]),
+        lon=float(foco["lon"]),
+        data_hora_gmt=_datetime_payload(foco),
+        satelite=foco.get("satelite"),
+        municipio=foco.get("municipio"),
+        estado=foco.get("estado"),
+        bioma=foco.get("bioma"),
+        risco_fogo=_float_payload(foco, "risco_fogo"),
+        precipitacao=_float_payload(foco, "precipitacao"),
+        numero_dias_sem_chuva=_int_payload(foco, "numero_dias_sem_chuva"),
+        frp=_float_payload(foco, "frp"),
+        fonte=foco.get("fonte") or fonte_default,
+    )
+
+
+def _upsert_foco(foco):
+    existente = db.session.get(FocoCalor, foco.id)
+    if existente:
+        for campo in (
+            "lat",
+            "lon",
+            "data_hora_gmt",
+            "satelite",
+            "municipio",
+            "estado",
+            "bioma",
+            "risco_fogo",
+            "precipitacao",
+            "numero_dias_sem_chuva",
+            "frp",
+            "fonte",
+        ):
+            setattr(existente, campo, getattr(foco, campo))
+        existente.atualizado_em = datetime.now(timezone.utc)
+        return existente, False
+    db.session.add(foco)
+    return foco, True
+
+
+def _focos_banco():
+    return [foco.to_dict() for foco in FocoCalor.query.order_by(FocoCalor.atualizado_em.desc()).all()]
+
+
+def _mesclar_focos(focos_online, focos_banco):
+    mesclados = {}
+    for foco in focos_online:
+        mesclados[str(foco["id"])] = foco
+    for foco in focos_banco:
+        mesclados[str(foco["id"])] = foco
+    return list(mesclados.values())
+
+
+def _focos_com_fallback_banco():
+    try:
+        payload = _queimadas_payload()
+        payload["focos"] = _mesclar_focos(payload["focos"], _focos_banco())
+        return payload
+    except Exception:
+        focos = _focos_banco()
+        if not focos:
+            raise
+        agora = datetime.now(timezone.utc).isoformat()
+        return {"focos": focos, "origem": "banco_postgresql", "url": None, "atualizado_em": agora}
+
+
 @api_bp.get("/health")
 def health():
     return api_response(
@@ -60,7 +157,7 @@ def fontes_status():
 @api_bp.get("/queimadas")
 def queimadas():
     try:
-        payload = _queimadas_payload()
+        payload = _focos_com_fallback_banco()
         filtros = request.args.to_dict()
         focos = bdqueimadas.aplicar_filtros(payload["focos"], filtros)
         if request.args.get("limite"):
@@ -82,7 +179,7 @@ def queimadas():
 @api_bp.get("/queimadas/resumo")
 def queimadas_resumo():
     try:
-        payload = _queimadas_payload()
+        payload = _focos_com_fallback_banco()
         focos = bdqueimadas.aplicar_filtros(payload["focos"], request.args.to_dict())
         agora = datetime.now(timezone.utc)
         ultimas_24h = [
@@ -108,6 +205,64 @@ def queimadas_resumo():
         return api_response(resumo, fonte="INPE BDQueimadas", atualizado_em=payload["atualizado_em"])
     except Exception as exc:
         return api_response({}, erro=str(exc), sucesso=False, fonte="INPE BDQueimadas", status=502)
+
+
+@api_bp.post("/focos/manual")
+def criar_foco_manual():
+    payload = request.get_json(silent=True) or {}
+    if payload.get("lat") in (None, "") or payload.get("lon") in (None, ""):
+        return api_response({}, erro="Latitude e longitude são obrigatórias.", sucesso=False, status=400)
+    try:
+        foco = _foco_model_from_dict(
+            {
+                **payload,
+                "id": payload.get("id") or f"manual-{uuid4()}",
+                "satelite": payload.get("satelite") or "COLETA MANUAL",
+                "fonte": "Coleta manual por geolocalização",
+            },
+            fonte_default="Coleta manual por geolocalização",
+        )
+        foco, criado = _upsert_foco(foco)
+        db.session.commit()
+        return api_response(
+            {"foco": foco.to_dict(), "criado": criado},
+            fonte="Observa Brasil Manual",
+            status=201 if criado else 200,
+        )
+    except (TypeError, ValueError) as exc:
+        db.session.rollback()
+        return api_response({}, erro=f"Dados inválidos para foco manual: {exc}", sucesso=False, status=400)
+
+
+@api_bp.post("/queimadas/clonar-base")
+def clonar_base_queimadas():
+    try:
+        payload = _queimadas_payload()
+        focos = bdqueimadas.aplicar_filtros(payload["focos"], request.args.to_dict())
+        criados = 0
+        atualizados = 0
+        for item in focos:
+            foco = _foco_model_from_dict({**item, "fonte": f"Clone {payload['origem']} - INPE BDQueimadas"})
+            _, criado = _upsert_foco(foco)
+            if criado:
+                criados += 1
+            else:
+                atualizados += 1
+        db.session.commit()
+        return api_response(
+            {
+                "total_processado": len(focos),
+                "criados": criados,
+                "atualizados": atualizados,
+                "origem": payload["origem"],
+                "url": payload["url"],
+            },
+            fonte="INPE BDQueimadas/PostgreSQL",
+            status=201,
+        )
+    except Exception as exc:
+        db.session.rollback()
+        return api_response({}, erro=str(exc), sucesso=False, fonte="INPE BDQueimadas/PostgreSQL", status=502)
 
 
 @api_bp.get("/vegetacao")

@@ -2,6 +2,7 @@ const mapElement = document.querySelector("#map");
 let map = null;
 let focusLayer = null;
 let drawnItems = null;
+let manualLocationMarker = null;
 
 function showMapError(message) {
   if (!mapElement) return;
@@ -73,6 +74,7 @@ function popup(foco) {
     <strong>${fmt(foco.municipio)} - ${fmt(foco.estado)}</strong><br>
     Bioma: ${fmt(foco.bioma)}<br>
     Satélite: ${fmt(foco.satelite)}<br>
+    Fonte: ${fmt(foco.fonte)}<br>
     Data: ${fmt(foco.data_hora_gmt)}<br>
     FRP: ${fmt(foco.frp)}<br>
     Risco: ${fmt(foco.risco_fogo)}<br>
@@ -80,6 +82,90 @@ function popup(foco) {
     Dias sem chuva: ${fmt(foco.numero_dias_sem_chuva)}<br>
     Lat/Lon: ${foco.lat}, ${foco.lon}
   `;
+}
+
+function setManualStatus(message, type = "") {
+  const status = document.querySelector("#manual-status");
+  if (!status) return;
+  status.textContent = message;
+  status.className = `manual-status ${type}`.trim();
+}
+
+function manualPayloadFromForm() {
+  const form = document.querySelector("#manual-focus-form");
+  const data = Object.fromEntries(new FormData(form).entries());
+  for (const key of Object.keys(data)) {
+    if (data[key] === "") delete data[key];
+  }
+  return data;
+}
+
+function setManualCoordinates(lat, lon) {
+  const form = document.querySelector("#manual-focus-form");
+  form.elements.lat.value = Number(lat).toFixed(6);
+  form.elements.lon.value = Number(lon).toFixed(6);
+  if (map && typeof L !== "undefined") {
+    const latlng = [Number(lat), Number(lon)];
+    if (!manualLocationMarker) {
+      manualLocationMarker = L.marker(latlng).addTo(map).bindPopup("Localização capturada");
+    } else {
+      manualLocationMarker.setLatLng(latlng);
+    }
+    map.setView(latlng, Math.max(map.getZoom(), 12));
+    manualLocationMarker.openPopup();
+  }
+}
+
+function captureLocation() {
+  if (!navigator.geolocation) {
+    setManualStatus("Geolocalização não disponível neste navegador.", "error");
+    return;
+  }
+  setManualStatus("Solicitando localização do dispositivo...");
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      setManualCoordinates(position.coords.latitude, position.coords.longitude);
+      setManualStatus(`Localização capturada com precisão aproximada de ${Math.round(position.coords.accuracy)} m.`, "success");
+    },
+    (error) => {
+      setManualStatus(`Não foi possível capturar a localização: ${error.message}`, "error");
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+  );
+}
+
+async function saveManualFocus(event) {
+  event.preventDefault();
+  setManualStatus("Salvando foco manual no banco...");
+  const response = await fetch("/api/focos/manual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(manualPayloadFromForm())
+  });
+  const payload = await response.json();
+  if (!payload.sucesso) {
+    setManualStatus(payload.erro || "Falha ao salvar foco manual.", "error");
+    return;
+  }
+  setManualStatus("Foco manual salvo no PostgreSQL.", "success");
+  await loadDashboard();
+}
+
+async function cloneCurrentBase() {
+  setManualStatus("Clonando base atual para o PostgreSQL...");
+  const params = buildParams();
+  params.delete("limite");
+  const response = await fetch(`/api/queimadas/clonar-base?${params}`, { method: "POST" });
+  const payload = await response.json();
+  if (!payload.sucesso) {
+    setManualStatus(payload.erro || "Falha ao clonar base atual.", "error");
+    return;
+  }
+  setManualStatus(
+    `Base clonada: ${payload.dados.criados} novos e ${payload.dados.atualizados} atualizados.`,
+    "success"
+  );
+  await loadDashboard();
 }
 
 function renderFocos(focos) {
@@ -206,6 +292,10 @@ document.querySelector("#filters").addEventListener("submit", (event) => {
   event.preventDefault();
   loadDashboard();
 });
+
+document.querySelector("#capture-location")?.addEventListener("click", captureLocation);
+document.querySelector("#manual-focus-form")?.addEventListener("submit", saveManualFocus);
+document.querySelector("#clone-current-base")?.addEventListener("click", cloneCurrentBase);
 
 document.querySelector("#export-csv").addEventListener("click", () => {
   const rows = [["data_hora_gmt", "municipio", "estado", "bioma", "satelite", "frp", "lat", "lon"]];
