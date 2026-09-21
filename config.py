@@ -13,10 +13,16 @@ def env_value(name, default=None):
     return value if value not in (None, "") else default
 
 
+def database_uri(value):
+    if value and value.startswith("postgresql://"):
+        return value.replace("postgresql://", "postgresql+psycopg://", 1)
+    return value
+
+
 class Config:
     SECRET_KEY = env_value("SECRET_KEY", "dev-change-me")
-    SQLALCHEMY_DATABASE_URI = env_value(
-        "DATABASE_URL", f"sqlite:///{BASE_DIR / 'instance' / 'observa_brasil.db'}"
+    SQLALCHEMY_DATABASE_URI = database_uri(
+        env_value("DATABASE_URL", f"sqlite:///{BASE_DIR / 'instance' / 'observa_brasil.db'}")
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JSON_SORT_KEYS = False

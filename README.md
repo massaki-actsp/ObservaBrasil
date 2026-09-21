@@ -267,6 +267,8 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 Não coloque `SECRET_KEY`, `DATABASE_URL` nem `.env` no GitHub.
 
+O Render normalmente fornece `DATABASE_URL` começando com `postgresql://`. Você pode colar esse valor exatamente como aparece no Render; a aplicação converte automaticamente para o driver `postgresql+psycopg://` usado pelo SQLAlchemy.
+
 ### 5. Fazer o deploy
 
 Clique em:
@@ -668,6 +670,8 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
 Não coloque essas variáveis com segredos no GitHub.
+
+Se a URL do Render começar com `postgresql://`, não altere manualmente. O projeto converte automaticamente para `postgresql+psycopg://` ao iniciar.
 
 ### 8. Testar a aplicação publicada
 
