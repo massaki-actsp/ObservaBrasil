@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Entrar - Observa Brasil{% endblock %}
+{% block content %}
+<div class="auth-panel">
+  <form method="post" class="auth-card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <h1>Entrar</h1>
+    <label class="form-label">E-mail
+      <input class="form-control" type="email" name="email" required>
+    </label>
+    <label class="form-label">Senha
+      <input class="form-control" type="password" name="password" required>
+    </label>
+    <button class="btn btn-success w-100" type="submit">Acessar</button>
+    <a href="{{ url_for('auth.register_form') }}">Criar cadastro</a>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Cadastro - Observa Brasil{% endblock %}
+{% block content %}
+<div class="auth-panel">
+  <form method="post" class="auth-card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <h1>Criar cadastro</h1>
+    <label class="form-label">Nome
+      <input class="form-control" type="text" name="nome" required>
+    </label>
+    <label class="form-label">E-mail
+      <input class="form-control" type="email" name="email" required>
+    </label>
+    <label class="form-label">Senha
+      <input class="form-control" type="password" name="password" minlength="8" required>
+    </label>
+    <button class="btn btn-success w-100" type="submit">Cadastrar</button>
+  </form>
+</div>
+{% endblock %}

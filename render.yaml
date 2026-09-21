@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: observa-brasil
+    env: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: observa-brasil-db
+          property: connectionString
+      - key: BDC_STAC_URL
+        value: https://data.inpe.br/bdc/stac/v1/
+      - key: INPE_QUEIMADAS_URL
+        value: https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/diario/Brasil/
+
+databases:
+  - name: observa-brasil-db
+    plan: starter

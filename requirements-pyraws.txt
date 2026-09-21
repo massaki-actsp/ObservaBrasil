@@ -1,0 +1,7 @@
+# Instale separadamente quando for processar cenas Sentinel-2 RAW locais.
+# CPU:
+pyraws
+
+# GPU: consulte a matriz CUDA/PyTorch compatível antes de instalar.
+# torch
+# torchvision

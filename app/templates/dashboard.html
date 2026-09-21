@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Painel - Observa Brasil{% endblock %}
+{% block content %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <h1>Monitoramento ambiental</h1>
+    <div class="device-badge" title="Detectado pelos cabeçalhos da requisição">
+      Acesso: {{ {"mobile": "celular", "tablet": "tablet", "desktop": "desktop"}.get(device.tipo, "desktop") }}
+    </div>
+    <form id="filters" class="vstack gap-3">
+      <label class="form-label">Data do CSV
+        <input class="form-control" type="text" name="data" placeholder="URL completa ou focos_diario_br_20260919">
+      </label>
+      <label class="form-label">Estado
+        <input class="form-control" type="text" name="estado" placeholder="ex.: Mato Grosso">
+      </label>
+      <label class="form-label">Bioma
+        <input class="form-control" type="text" name="bioma" placeholder="ex.: Amazônia">
+      </label>
+      <label class="form-label">Satélite
+        <input class="form-control" type="text" name="satelite" placeholder="ex.: AQUA_M-T">
+      </label>
+      <label class="form-label">FRP mínimo
+        <input class="form-control" type="number" step="0.1" name="frp_min">
+      </label>
+      <button class="btn btn-success" type="submit">Atualizar painel</button>
+    </form>
+    <details class="data-help">
+      <summary>Como os dados são atualizados?</summary>
+      <div class="data-help-body">
+        <p>O painel consulta os focos de calor sob demanda no diretório oficial do INPE.</p>
+        <ul>
+          <li>Com <strong>Data do CSV</strong> em branco, a aplicação usa o CSV mais recente.</li>
+          <li>Você pode informar nome, arquivo ou URL completa do CSV.</li>
+          <li>O CSV baixado é salvo em cache local para reduzir falhas temporárias.</li>
+          <li>Se o INPE demorar e a data estiver em branco, o painel tenta usar o cache mais recente.</li>
+          <li>Os dados são normalizados em memória antes de alimentar mapa, gráficos e tabela.</li>
+          <li>Produtos Sentinel-2 são consultados sob demanda no Brazil Data Cube STAC.</li>
+        </ul>
+        <div class="data-help-examples">
+          <span>Exemplos aceitos:</span>
+          <code>focos_diario_br_20260919</code>
+          <code>focos_diario_br_20260919.csv</code>
+          <code>https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/diario/Brasil/focos_diario_br_20260919.csv</code>
+        </div>
+        <p class="data-help-note">Hoje os focos do INPE são consumidos via CSV online com cache; ainda não há sincronização automática periódica para o banco local.</p>
+      </div>
+    </details>
+    <div class="source-status" id="source-status">Verificando fontes...</div>
+  </aside>
+  <section class="workspace">
+    <div class="cards">
+      <article><span>Total de focos</span><strong id="metric-total">--</strong></article>
+      <article><span>Últimas 24h</span><strong id="metric-24h">--</strong></article>
+      <article><span>FRP médio</span><strong id="metric-frp">--</strong></article>
+      <article><span>Atualização</span><strong id="metric-updated">--</strong></article>
+    </div>
+    <div class="map-panel">
+      <div id="map"></div>
+      <div class="map-data-status" id="map-data-status">Carregando focos no mapa...</div>
+      <div class="legend">
+        <span class="dot fire"></span> Focos de calor
+        <span class="dot vegetation"></span> Vegetação
+        <span class="dot water"></span> Água
+      </div>
+    </div>
+    <div class="analysis-grid">
+      <section>
+        <h2>Focos por estado</h2>
+        <div class="chart-box">
+          <canvas id="chart-state"></canvas>
+        </div>
+      </section>
+      <section>
+        <h2>Focos por bioma</h2>
+        <div class="chart-box">
+          <canvas id="chart-biome"></canvas>
+        </div>
+      </section>
+    </div>
+    <section class="table-panel">
+      <div class="d-flex align-items-center justify-content-between">
+        <h2>Focos recentes</h2>
+        <button id="export-csv" class="btn btn-outline-secondary btn-sm" type="button">Exportar CSV</button>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Data</th><th>Município</th><th>Estado</th><th>Bioma</th><th>Satélite</th><th>FRP</th>
+            </tr>
+          </thead>
+          <tbody id="focus-table"></tbody>
+        </table>
+      </div>
+      <p class="method-note">Foco de calor indica detecção térmica por satélite e não confirma, sozinho, incêndio ou extensão total de área queimada.</p>
+    </section>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js', v='20260921-2') }}"></script>
+<script src="{{ url_for('static', filename='vendor/markercluster/leaflet.markercluster.js', v='20260921-2') }}"></script>
+<script src="{{ url_for('static', filename='vendor/leaflet-draw/leaflet.draw.js', v='20260921-2') }}"></script>
+<script src="{{ url_for('static', filename='vendor/chartjs/chart.umd.min.js', v='20260921-2') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js', v='20260921-2') }}"></script>
+{% endblock %}
