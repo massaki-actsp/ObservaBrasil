@@ -155,13 +155,195 @@ O ponto de entrada de produção é:
 wsgi:application
 ```
 
+O arquivo `wsgi.py` cria a aplicação Flask sem iniciar o servidor de desenvolvimento. Esse é o formato esperado por servidores WSGI como o Gunicorn e por plataformas de produção como Render.
+
 Para executar localmente com Gunicorn em Linux ou dentro do contêiner:
 
 ```bash
 gunicorn "wsgi:application" --bind "0.0.0.0:${PORT:-5000}" --workers 2 --threads 4 --timeout 120 --forwarded-allow-ips="*"
 ```
 
-No Dockerfile, esse comando já está configurado. O `--forwarded-allow-ips="*"` permite que o Flask receba corretamente cabeçalhos encaminhados por proxy ou plataforma de nuvem.
+No Dockerfile e no `Procfile`, esse comando já está configurado. O `--forwarded-allow-ips="*"` permite que o Flask receba corretamente cabeçalhos encaminhados por proxy ou plataforma de nuvem.
+
+## Render Web Service
+
+O projeto está pronto para subir no Render como **Web Service**. A opção recomendada é usar **Runtime: Docker**, porque o projeto depende de bibliotecas geoespaciais como GDAL, GeoPandas e Rasterio, que são mais estáveis dentro do Dockerfile já incluído.
+
+### 1. Antes de entrar no Render
+
+Confirme que o projeto já foi enviado para o GitHub e que estes arquivos existem na raiz do repositório:
+
+```text
+Dockerfile
+Procfile
+README.md
+render.yaml
+requirements.txt
+wsgi.py
+```
+
+No PowerShell, confira localmente:
+
+```powershell
+cd C:\Users\massa\Documents\ChatGPT\ObservaBrasil
+git status
+Test-Path .\Dockerfile
+Test-Path .\Procfile
+Test-Path .\wsgi.py
+Test-Path .\requirements.txt
+```
+
+Rode os testes antes de publicar:
+
+```powershell
+python -m pytest -q
+```
+
+Depois envie tudo para o GitHub:
+
+```powershell
+git add .
+git commit -m "Prepara deploy no Render com WSGI e Gunicorn"
+git branch -M main
+git push -u origin main
+```
+
+Se não houver alterações para commit, o Git pode responder `nothing to commit`; nesse caso, apenas confirme que o push já foi feito.
+
+### 2. Criar o banco PostgreSQL no Render
+
+No painel do Render:
+
+```text
+New > PostgreSQL
+Name: observa-brasil-db
+Region: escolha a região mais próxima
+Plan: escolha o plano desejado
+Create Database
+```
+
+Após a criação, abra o banco e copie a `Internal Database URL`. Ela será usada como `DATABASE_URL` no Web Service.
+
+### 3. Criar o Web Service
+
+No painel do Render:
+
+```text
+New > Web Service
+Build and deploy from a Git repository
+Conecte sua conta GitHub
+Repository: SEU_USUARIO/ObservaBrasil
+Branch: main
+Runtime: Docker
+Root Directory: deixe em branco
+Dockerfile Path: ./Dockerfile
+Health Check Path: /api/health
+```
+
+Com Runtime Docker, deixe `Build Command` e `Start Command` em branco. O Render usará o `CMD` do `Dockerfile`, que já inicia o Gunicorn:
+
+```text
+gunicorn "wsgi:application" --bind "0.0.0.0:${PORT:-5000}" --workers 2 --threads 4 --timeout 120 --forwarded-allow-ips="*"
+```
+
+### 4. Configurar variáveis de ambiente
+
+No Web Service, abra `Environment` e cadastre:
+
+```text
+FLASK_ENV=production
+SECRET_KEY=gere-um-valor-seguro-no-render
+DATABASE_URL=cole-a-Internal-Database-URL-do-PostgreSQL-do-Render
+BDC_STAC_URL=https://data.inpe.br/bdc/stac/v1/
+INPE_QUEIMADAS_URL=https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/diario/Brasil/
+REQUEST_TIMEOUT=45
+```
+
+Para gerar um `SECRET_KEY` no PowerShell:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Não coloque `SECRET_KEY`, `DATABASE_URL` nem `.env` no GitHub.
+
+### 5. Fazer o deploy
+
+Clique em:
+
+```text
+Create Web Service
+```
+
+Depois acompanhe:
+
+```text
+Web Service > Logs
+Web Service > Events
+Web Service > Deploys
+```
+
+Quando o deploy terminar, o Render disponibilizará uma URL no formato:
+
+```text
+https://observa-brasil.onrender.com
+```
+
+### 6. Testar a publicação
+
+No PowerShell, substitua a URL pela URL real gerada pelo Render:
+
+```powershell
+$RENDER_URL = "https://observa-brasil.onrender.com"
+Invoke-RestMethod -Uri "$RENDER_URL/api/health"
+Invoke-RestMethod -Uri "$RENDER_URL/api/fontes/status"
+Invoke-RestMethod -Uri "$RENDER_URL/api/queimadas?data=focos_diario_br_20260919&estado=SÃO%20PAULO&limite=10"
+Start-Process $RENDER_URL
+```
+
+O endpoint `/api/health` deve retornar `status: ok`. O painel principal deve abrir no navegador e carregar mapa, cards, gráficos e tabela.
+
+### 7. Atualizar depois de publicado
+
+Depois de novas alterações locais:
+
+```powershell
+git status
+git add .
+git commit -m "Descreva a alteracao"
+git push
+```
+
+Com `Auto-Deploy` ativado no Render, cada push na branch `main` inicia um novo deploy automaticamente.
+
+### 8. Opção Blueprint
+
+O arquivo `render.yaml` também permite criar os recursos pelo modo Blueprint:
+
+```text
+New > Blueprint > conecte o GitHub > selecione SEU_USUARIO/ObservaBrasil > Apply
+```
+
+Esse caminho cria o Web Service Docker e o PostgreSQL conforme o arquivo `render.yaml`.
+
+### Alternativa sem Docker
+
+Se quiser testar como Runtime Python no Render, use:
+
+```text
+Runtime: Python 3
+Build Command: pip install -r requirements.txt
+Start Command: gunicorn "wsgi:application" --bind "0.0.0.0:$PORT" --workers 2 --threads 4 --timeout 120 --forwarded-allow-ips="*"
+Health Check Path: /api/health
+```
+
+Essa alternativa pode falhar se o ambiente nativo do Render não tiver bibliotecas de sistema compatíveis com GDAL/Rasterio. Para este projeto, Docker é o caminho mais confiável.
+
+Referências úteis do Render:
+
+- [Deploy Flask App](https://render.com/docs/deploy-flask)
+- [Blueprint YAML Reference](https://render.com/docs/blueprint-spec)
+- [Deploys](https://render.com/docs/deploys)
 
 ## Suporte multidispositivo
 
@@ -408,10 +590,11 @@ gh repo view --web
 
 ### 5. Conferir arquivos antes do Render
 
-Confirme que estes arquivos existem no GitHub:
+Confirme que estes arquivos existem no projeto antes de publicar:
 
 ```powershell
 Test-Path .\Dockerfile
+Test-Path .\Procfile
 Test-Path .\render.yaml
 Test-Path .\wsgi.py
 Test-Path .\requirements.txt
@@ -431,13 +614,33 @@ Get-Content .\render.yaml
 
 ### 6. Publicar no Render
 
-A criação do Blueprint no Render precisa ser feita no painel web, mas você pode abrir o painel pelo PowerShell:
+Abra o painel do Render pelo PowerShell:
 
 ```powershell
 Start-Process "https://dashboard.render.com/"
 ```
 
-No Render, faça:
+O caminho recomendado para este projeto é Web Service com Docker:
+
+```text
+New > Web Service > conecte o GitHub > selecione SEU_USUARIO/ObservaBrasil
+Runtime: Docker
+Dockerfile Path: ./Dockerfile
+Health Check Path: /api/health
+Build Command: vazio
+Start Command: vazio
+```
+
+Antes ou durante a configuração do Web Service, crie um PostgreSQL no Render:
+
+```text
+New > PostgreSQL
+Name: observa-brasil-db
+```
+
+Copie a `Internal Database URL` do PostgreSQL para a variável `DATABASE_URL` do Web Service.
+
+Se preferir usar Blueprint:
 
 ```text
 New > Blueprint > conecte o GitHub > selecione SEU_USUARIO/ObservaBrasil > use render.yaml > Apply
@@ -447,17 +650,21 @@ Depois de criado, abra os logs pelo painel do Render e aguarde o build Docker fi
 
 ### 7. Configurar variáveis no Render
 
-No serviço web criado pelo Render, configure ou confira:
+No Web Service criado pelo Render, configure ou confira:
 
-```powershell
-@"
+```text
 FLASK_ENV=production
 SECRET_KEY=gere-um-valor-seguro-no-render
-DATABASE_URL=preenchido-pelo-postgresql-do-render
+DATABASE_URL=cole-a-Internal-Database-URL-do-PostgreSQL-do-Render
 BDC_STAC_URL=https://data.inpe.br/bdc/stac/v1/
 INPE_QUEIMADAS_URL=https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/diario/Brasil/
 REQUEST_TIMEOUT=45
-"@
+```
+
+Para gerar `SECRET_KEY` pelo PowerShell:
+
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
 Não coloque essas variáveis com segredos no GitHub.

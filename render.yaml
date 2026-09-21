@@ -17,6 +17,8 @@ services:
         value: https://data.inpe.br/bdc/stac/v1/
       - key: INPE_QUEIMADAS_URL
         value: https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/diario/Brasil/
+      - key: REQUEST_TIMEOUT
+        value: 45
 
 databases:
   - name: observa-brasil-db
