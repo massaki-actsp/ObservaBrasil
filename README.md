@@ -160,7 +160,7 @@ O arquivo `wsgi.py` cria a aplicação Flask sem iniciar o servidor de desenvolv
 Para executar localmente com Gunicorn em Linux ou dentro do contêiner:
 
 ```bash
-gunicorn "wsgi:application" --bind "0.0.0.0:${PORT:-5000}" --workers 2 --threads 4 --timeout 120 --forwarded-allow-ips="*"
+gunicorn "wsgi:application" --bind "0.0.0.0:${PORT:-5000}" --workers 1 --threads 4 --timeout 120 --forwarded-allow-ips="*"
 ```
 
 No Dockerfile e no `Procfile`, esse comando já está configurado. O `--forwarded-allow-ips="*"` permite que o Flask receba corretamente cabeçalhos encaminhados por proxy ou plataforma de nuvem.
@@ -243,7 +243,7 @@ Health Check Path: /api/health
 Com Runtime Docker, deixe `Build Command` e `Start Command` em branco. O Render usará o `CMD` do `Dockerfile`, que já inicia o Gunicorn:
 
 ```text
-gunicorn "wsgi:application" --bind "0.0.0.0:${PORT:-5000}" --workers 2 --threads 4 --timeout 120 --forwarded-allow-ips="*"
+gunicorn "wsgi:application" --bind "0.0.0.0:${PORT:-5000}" --workers 1 --threads 4 --timeout 120 --forwarded-allow-ips="*"
 ```
 
 ### 4. Configurar variáveis de ambiente
@@ -335,7 +335,7 @@ Se quiser testar como Runtime Python no Render, use:
 ```text
 Runtime: Python 3
 Build Command: pip install -r requirements.txt
-Start Command: gunicorn "wsgi:application" --bind "0.0.0.0:$PORT" --workers 2 --threads 4 --timeout 120 --forwarded-allow-ips="*"
+Start Command: gunicorn "wsgi:application" --bind "0.0.0.0:$PORT" --workers 1 --threads 4 --timeout 120 --forwarded-allow-ips="*"
 Health Check Path: /api/health
 ```
 
