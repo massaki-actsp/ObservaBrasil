@@ -89,6 +89,34 @@ def test_criar_foco_manual(client, app):
         assert FocoCalor.query.count() == 1
 
 
+def test_resumo_inclui_foco_manual_sem_quebrar_data(client, monkeypatch):
+    monkeypatch.setattr(
+        bdqueimadas,
+        "obter_focos",
+        lambda *args, **kwargs: {
+            "url": "x",
+            "origem": "rede",
+            "focos": bdqueimadas.ler_csv(CSV),
+            "atualizado_em": "2026-09-19T12:00:00+00:00",
+        },
+    )
+    client.post(
+        "/api/focos/manual",
+        json={
+            "lat": -23.55052,
+            "lon": -46.633308,
+            "municipio": "São Paulo",
+            "estado": "São Paulo",
+            "bioma": "Mata Atlântica",
+        },
+    )
+
+    response = client.get("/api/queimadas/resumo")
+
+    assert response.status_code == 200
+    assert response.json["dados"]["por_estado"]["São Paulo"] == 1
+
+
 def test_criar_foco_manual_exige_lat_lon(client):
     response = client.post("/api/focos/manual", json={"estado": "São Paulo"})
 

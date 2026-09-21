@@ -23,7 +23,16 @@
       <label class="form-label">FRP mínimo
         <input class="form-control" type="number" step="0.1" name="frp_min">
       </label>
-      <button class="btn btn-success" type="submit">Atualizar painel</button>
+      <button id="update-dashboard" class="btn btn-success" type="submit">Atualizar painel</button>
+      <div id="load-progress" class="load-progress" hidden>
+        <div class="load-progress-header">
+          <span id="load-progress-label">Preparando atualização...</span>
+          <strong id="load-progress-percent">0%</strong>
+        </div>
+        <div class="load-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="load-progress-bar" class="load-progress-bar"></div>
+        </div>
+      </div>
     </form>
     <details class="data-help">
       <summary>Como os dados são atualizados?</summary>

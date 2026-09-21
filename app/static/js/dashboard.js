@@ -51,6 +51,8 @@ let lastFocos = [];
 let chartState = null;
 let chartBiome = null;
 let lastSummary = null;
+let loadProgressTimer = null;
+let loadProgressValue = 0;
 
 function isNarrowScreen() {
   return window.matchMedia("(max-width: 640px)").matches;
@@ -67,6 +69,62 @@ function buildParams() {
 
 function fmt(value) {
   return value === null || value === undefined ? "--" : value;
+}
+
+function setLoadProgress(value, label) {
+  const progress = document.querySelector("#load-progress");
+  const bar = document.querySelector("#load-progress-bar");
+  const percent = document.querySelector("#load-progress-percent");
+  const text = document.querySelector("#load-progress-label");
+  const track = progress?.querySelector(".load-progress-track");
+  if (!progress || !bar || !percent || !text || !track) return;
+  loadProgressValue = Math.max(0, Math.min(100, Math.round(value)));
+  progress.hidden = false;
+  progress.classList.remove("error", "complete");
+  bar.style.width = `${loadProgressValue}%`;
+  percent.textContent = `${loadProgressValue}%`;
+  text.textContent = label;
+  track.setAttribute("aria-valuenow", String(loadProgressValue));
+}
+
+function startLoadProgress(label = "Consultando base de dados...") {
+  const button = document.querySelector("#update-dashboard");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Atualizando...";
+  }
+  clearInterval(loadProgressTimer);
+  setLoadProgress(8, label);
+  loadProgressTimer = setInterval(() => {
+    const next = loadProgressValue < 55 ? loadProgressValue + 7 : loadProgressValue < 86 ? loadProgressValue + 3 : loadProgressValue;
+    setLoadProgress(Math.min(next, 88), "Baixando e processando dados...");
+  }, 500);
+}
+
+function finishLoadProgress(label = "Dados atualizados.") {
+  clearInterval(loadProgressTimer);
+  setLoadProgress(100, label);
+  document.querySelector("#load-progress")?.classList.add("complete");
+  const button = document.querySelector("#update-dashboard");
+  if (button) {
+    button.disabled = false;
+    button.textContent = "Atualizar painel";
+  }
+  setTimeout(() => {
+    const progress = document.querySelector("#load-progress");
+    if (progress) progress.hidden = true;
+  }, 1200);
+}
+
+function failLoadProgress(label = "Falha ao atualizar dados.") {
+  clearInterval(loadProgressTimer);
+  setLoadProgress(100, label);
+  document.querySelector("#load-progress")?.classList.add("error");
+  const button = document.querySelector("#update-dashboard");
+  if (button) {
+    button.disabled = false;
+    button.textContent = "Atualizar painel";
+  }
 }
 
 function popup(foco) {
@@ -254,29 +312,43 @@ function renderTable(focos) {
 }
 
 async function loadDashboard() {
+  startLoadProgress("Preparando consulta...");
   const params = buildParams();
-  const [summaryRes, focusRes] = await Promise.all([
-    fetch(`/api/queimadas/resumo?${params}`),
-    fetch(`/api/queimadas?${params}`)
-  ]);
-  const summary = await summaryRes.json();
-  const focus = await focusRes.json();
-  if (!summary.sucesso || !focus.sucesso) {
-    document.querySelector("#source-status").textContent = summary.erro || focus.erro || "Falha ao consultar fontes.";
+  try {
+    setLoadProgress(18, "Enviando filtros para a API...");
+    const summaryPromise = fetch(`/api/queimadas/resumo?${params}`);
+    const focusPromise = fetch(`/api/queimadas?${params}`);
+    const [summaryRes, focusRes] = await Promise.all([summaryPromise, focusPromise]);
+    setLoadProgress(78, "Normalizando focos de calor...");
+    const summary = await summaryRes.json();
+    const focus = await focusRes.json();
+    if (!summary.sucesso || !focus.sucesso) {
+      const errorMessage = summary.erro || focus.erro || "Falha ao consultar fontes.";
+      document.querySelector("#source-status").textContent = errorMessage;
+      const status = document.querySelector("#map-data-status");
+      if (status) status.textContent = "Focos indisponíveis";
+      failLoadProgress(`Falha: ${errorMessage}`);
+      return;
+    }
+    setLoadProgress(90, "Atualizando mapa, gráficos e tabela...");
+    lastSummary = summary.dados;
+    lastFocos = focus.dados.focos;
+    document.querySelector("#metric-total").textContent = summary.dados.total_focos;
+    document.querySelector("#metric-24h").textContent = summary.dados.focos_ultimas_24h;
+    document.querySelector("#metric-frp").textContent = summary.dados.frp_medio ? summary.dados.frp_medio.toFixed(2) : "--";
+    document.querySelector("#metric-updated").textContent = new Date(summary.dados.ultima_atualizacao).toLocaleString("pt-BR");
+    renderFocos(lastFocos);
+    renderTable(lastFocos);
+    renderCharts(summary.dados);
+    if (map) setTimeout(() => map.invalidateSize(), 100);
+    finishLoadProgress("Dados atualizados.");
+  } catch (error) {
+    const errorMessage = error.message || "Falha ao consultar fontes.";
+    document.querySelector("#source-status").textContent = errorMessage;
     const status = document.querySelector("#map-data-status");
     if (status) status.textContent = "Focos indisponíveis";
-    return;
+    failLoadProgress(`Falha: ${errorMessage}`);
   }
-  lastSummary = summary.dados;
-  lastFocos = focus.dados.focos;
-  document.querySelector("#metric-total").textContent = summary.dados.total_focos;
-  document.querySelector("#metric-24h").textContent = summary.dados.focos_ultimas_24h;
-  document.querySelector("#metric-frp").textContent = summary.dados.frp_medio ? summary.dados.frp_medio.toFixed(2) : "--";
-  document.querySelector("#metric-updated").textContent = new Date(summary.dados.ultima_atualizacao).toLocaleString("pt-BR");
-  renderFocos(lastFocos);
-  renderTable(lastFocos);
-  renderCharts(summary.dados);
-  if (map) setTimeout(() => map.invalidateSize(), 100);
 }
 
 async function loadStatus() {

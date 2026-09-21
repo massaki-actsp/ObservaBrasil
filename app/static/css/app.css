@@ -51,6 +51,76 @@ body {
   margin-top: 20px;
 }
 
+.load-progress {
+  background: #f8fbf9;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.load-progress[hidden] {
+  display: none;
+}
+
+.load-progress-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.load-progress-header span,
+.load-progress-header strong {
+  font-size: .82rem;
+  line-height: 1.2;
+}
+
+.load-progress-header span {
+  color: var(--muted);
+}
+
+.load-progress-header strong {
+  color: var(--green);
+  min-width: 42px;
+  text-align: right;
+}
+
+.load-progress-track {
+  background: #e5eee9;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.load-progress-bar {
+  background: linear-gradient(90deg, var(--green), var(--orange));
+  border-radius: inherit;
+  height: 100%;
+  transition: width .25s ease;
+  width: 0%;
+}
+
+.load-progress.error .load-progress-bar {
+  background: var(--red);
+}
+
+.load-progress.error .load-progress-header strong,
+.load-progress.error .load-progress-header span {
+  color: var(--red);
+}
+
+.load-progress.complete .load-progress-bar {
+  background: var(--green);
+}
+
+.load-progress.complete .load-progress-header strong,
+.load-progress.complete .load-progress-header span {
+  color: var(--green);
+}
+
 .data-help {
   border: 1px solid var(--line);
   border-radius: 8px;

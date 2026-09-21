@@ -56,12 +56,21 @@ def _datetime_payload(payload):
     if not valor:
         return datetime.now(timezone.utc)
     if isinstance(valor, datetime):
-        return valor
+        return valor if valor.tzinfo else valor.replace(tzinfo=timezone.utc)
     texto = str(valor).strip().replace("Z", "+00:00")
     try:
-        return datetime.fromisoformat(texto)
+        data = datetime.fromisoformat(texto)
     except ValueError:
-        return datetime.strptime(texto, "%Y-%m-%d %H:%M:%S")
+        data = datetime.strptime(texto, "%Y-%m-%d %H:%M:%S")
+    return data if data.tzinfo else data.replace(tzinfo=timezone.utc)
+
+
+def _datetime_utc(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return _datetime_payload({"data_hora_gmt": value})
 
 
 def _foco_model_from_dict(foco, fonte_default="INPE BDQueimadas"):
@@ -107,7 +116,25 @@ def _upsert_foco(foco):
 
 
 def _focos_banco():
-    return [foco.to_dict() for foco in FocoCalor.query.order_by(FocoCalor.atualizado_em.desc()).all()]
+    return [
+        {
+            "id": foco.id,
+            "lat": foco.lat,
+            "lon": foco.lon,
+            "data_hora_gmt": foco.data_hora_gmt,
+            "satelite": foco.satelite,
+            "municipio": foco.municipio,
+            "estado": foco.estado,
+            "bioma": foco.bioma,
+            "risco_fogo": foco.risco_fogo,
+            "precipitacao": foco.precipitacao,
+            "numero_dias_sem_chuva": foco.numero_dias_sem_chuva,
+            "frp": foco.frp,
+            "fonte": foco.fonte,
+            "atualizado_em": foco.atualizado_em,
+        }
+        for foco in FocoCalor.query.order_by(FocoCalor.atualizado_em.desc()).all()
+    ]
 
 
 def _mesclar_focos(focos_online, focos_banco):
@@ -183,7 +210,10 @@ def queimadas_resumo():
         focos = bdqueimadas.aplicar_filtros(payload["focos"], request.args.to_dict())
         agora = datetime.now(timezone.utc)
         ultimas_24h = [
-            f for f in focos if f.get("data_hora_gmt") and f["data_hora_gmt"] >= agora - timedelta(hours=24)
+            f
+            for f in focos
+            if _datetime_utc(f.get("data_hora_gmt"))
+            and _datetime_utc(f.get("data_hora_gmt")) >= agora - timedelta(hours=24)
         ]
         def contar(campo):
             out = {}
