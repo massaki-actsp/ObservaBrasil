@@ -16,6 +16,35 @@ body {
   overflow-x: hidden;
 }
 
+.app-brand {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.app-brand img {
+  background: #fff;
+  border: 1px solid rgba(255, 255, 255, .55);
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.app-credit-header {
+  color: rgba(255, 255, 255, .88);
+  font-size: .82rem;
+  margin-left: auto;
+  margin-right: 16px;
+}
+
+.app-footer {
+  background: #fff;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .86rem;
+  padding: 10px 16px;
+  text-align: center;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -421,6 +450,9 @@ body {
 }
 
 @media (max-width: 980px) {
+  .app-credit-header {
+    display: none;
+  }
   .app-shell {
     grid-template-columns: 1fr;
   }
